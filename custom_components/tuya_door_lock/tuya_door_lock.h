@@ -3,6 +3,7 @@
 #include <cinttypes>
 #include <vector>
 
+#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/text/text.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
@@ -103,11 +104,11 @@ class TuyaDoorLock : public Component, public uart::UARTDevice {
   void set_boolean_datapoint_value(uint8_t datapoint_id, bool value);
   void set_integer_datapoint_value(uint8_t datapoint_id, uint32_t value);
   void set_status_pin(InternalGPIOPin *status_pin) { this->status_pin_ = status_pin; }
-  void set_en_pin(InternalGPIOPin *en_pin) { this->en_pin_ = en_pin; }
+  void set_en_binary_sensor(binary_sensor::BinarySensor *en_binary_sensor) { this->en_binary_sensor_ = en_binary_sensor; }
   // static void listen_enable_pin(TuyaDoorLock *arg);
   void set_totp_key(const std::string key) { this->totp_key_b32 = key; }
   void parse_totp_key();
-  // void set_input_totp_text(text::Text *input_totp_text) { input_totp_text_ = input_totp_text; }
+  // void set_input_totp_text(text::Text *input_totp_text) { this->input_totp_text_ = input_totp_text; }
   void set_string_datapoint_value(uint8_t datapoint_id, const std::string &value);
   void set_enum_datapoint_value(uint8_t datapoint_id, uint8_t value);
   void set_bitmask_datapoint_value(uint8_t datapoint_id, uint32_t value, uint8_t length);
@@ -150,7 +151,6 @@ class TuyaDoorLock : public Component, public uart::UARTDevice {
   void set_raw_datapoint_value_(uint8_t datapoint_id, const std::vector<uint8_t> &value, bool forced);
   void send_datapoint_command_(uint8_t datapoint_id, TuyaDoorLockDatapointType datapoint_type, std::vector<uint8_t> data);
   void set_status_pin_();
-  // void set_en_pin_();
   void send_wifi_status_();
   uint8_t get_wifi_status_code_();
   uint8_t get_wifi_rssi_();
@@ -166,7 +166,7 @@ class TuyaDoorLock : public Component, public uart::UARTDevice {
   int init_retries_{0};
   uint8_t protocol_version_ = -1;
   InternalGPIOPin *status_pin_{nullptr};
-  InternalGPIOPin *en_pin_{nullptr};
+  binary_sensor::BinarySensor *en_binary_sensor_{nullptr};
   bool has_sent_wifi_status = false;
   int status_pin_reported_ = -1;
   int reset_pin_reported_ = -1;

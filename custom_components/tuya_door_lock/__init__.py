@@ -3,7 +3,8 @@ from esphome import automation
 from esphome import pins
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import uart, text
+from esphome.components import uart
+from esphome.components.binary_sensor import BinarySensor
 from esphome.const import CONF_ID, CONF_TIME_ID, CONF_TRIGGER_ID, CONF_SENSOR_DATAPOINT
 
 DEPENDENCIES = ["uart"]
@@ -13,9 +14,8 @@ CONF_IGNORE_MCU_UPDATE_ON_DATAPOINTS = "ignore_mcu_update_on_datapoints"
 CONF_ON_DATAPOINT_UPDATE = "on_datapoint_update"
 CONF_DATAPOINT_TYPE = "datapoint_type"
 CONF_STATUS_PIN = "status_pin"
-CONF_ENABLE_PIN = "en_pin"
+CONF_ENABLE_SENSOR = "en_binary_sensor"
 CONF_TOTP_KEY = "totp_key_b32"
-# CONF_REQUEST_REMOTE_TOTP = "input_totp_text_id"
 
 tuya_ns = cg.esphome_ns.namespace("tuya_door_lock")
 TuyaDoorLock = tuya_ns.class_("TuyaDoorLock", cg.Component, uart.UARTDevice)
@@ -94,8 +94,7 @@ CONFIG_SCHEMA = (
                 cv.uint8_t
             ),
             cv.Optional(CONF_STATUS_PIN): pins.gpio_output_pin_schema,
-            # IDK how to make trigger work, just read form the GPIO
-            cv.Optional(CONF_ENABLE_PIN): pins.gpio_input_pin_schema,
+            cv.Optional(CONF_ENABLE_SENSOR): cv.use_id(BinarySensor),
             cv.Optional(CONF_TOTP_KEY): cv.string,
             cv.Optional(CONF_ON_DATAPOINT_UPDATE): automation.validate_automation(
                 {
@@ -127,16 +126,13 @@ async def to_code(config):
     if CONF_STATUS_PIN in config:
         status_pin_ = await cg.gpio_pin_expression(config[CONF_STATUS_PIN])
         cg.add(var.set_status_pin(status_pin_))
-    if CONF_ENABLE_PIN in config:
-        set_en_pin_ = await cg.gpio_pin_expression(config[CONF_ENABLE_PIN])
-        cg.add(var.set_en_pin(set_en_pin_))
+    if CONF_ENABLE_SENSOR in config:
+        input_totp_text = await cg.get_variable(config[CONF_ENABLE_SENSOR])
+        cg.add(var.set_en_binary_sensor(input_totp_text))
     if CONF_TOTP_KEY in config:
         # base32 generator may pad '=' at the end
         totp_key = config[CONF_TOTP_KEY].strip().strip('=')
         cg.add(var.set_totp_key(totp_key))
-    # if CONF_REQUEST_REMOTE_TOTP in config:
-    #     input_totp_text = await cg.get_variable(config[CONF_REQUEST_REMOTE_TOTP])
-    #     cg.add(var.set_input_totp_text(input_totp_text))
     if CONF_IGNORE_MCU_UPDATE_ON_DATAPOINTS in config:
         for dp in config[CONF_IGNORE_MCU_UPDATE_ON_DATAPOINTS]:
             cg.add(var.add_ignore_mcu_update_on_datapoints(dp))

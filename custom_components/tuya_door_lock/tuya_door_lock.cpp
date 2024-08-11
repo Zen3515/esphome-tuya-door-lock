@@ -25,21 +25,13 @@ static const int MAX_RETRIES = 5;
 
 void TuyaDoorLock::setup() {
   this->send_empty_command_(TuyaDoorLockCommandType::PRODUCT_QUERY);
-
-  if (this->en_pin_ != nullptr) {
-    ESP_LOGI(TAG, "setting up enable pin listener");
-    this->en_pin_->setup();
-  } else {
-    ESP_LOGD(TAG, "en_pin_ is not set");
-  }
-
   this->parse_totp_key();
   ESP_LOGD(TAG, "Finished setup");
 }
 
 void TuyaDoorLock::loop() {
-  if ((this->init_state_ == TuyaDoorLockInitState::INIT_DONE) && (this->en_pin_ != nullptr)) {
-    const bool is_enable = this->en_pin_->digital_read();
+  if ((this->init_state_ == TuyaDoorLockInitState::INIT_DONE) && (this->en_binary_sensor_ != nullptr)) {
+    const bool is_enable = this->en_binary_sensor_->state;
     if (is_enable) {
       if (!this->has_sent_wifi_status) {
         ESP_LOGD(TAG, "Tuya module enabled, reporting cloud connection in 1.25s, 3s");
@@ -95,7 +87,7 @@ void TuyaDoorLock::dump_config() {
                   this->reset_pin_reported_);
   }
   LOG_PIN("  Status Pin: ", this->status_pin_);
-  LOG_PIN("  EN Pin: ", this->en_pin_);
+  LOG_BINARY_SENSOR("", "  EN Sensor: ", this->en_binary_sensor_);
   ESP_LOGCONFIG(TAG, "  Product: '%s'", this->product_.c_str());
   if (this->totp_key_length_ > 0) {
     ESP_LOGCONFIG(TAG, "  totp: enabled");
@@ -284,8 +276,6 @@ void TuyaDoorLock::handle_command_(uint8_t command, uint8_t version, const uint8
           ESP_LOGW(TAG, "Current time is invalid, cannot generate TOTP password.");
           break;
         }
-        // uint8_t *input_password = buffer[6];
-        // Directly extract and compare from the buffer
         if (memcmp(generated_password_str, (char *)(buffer + 6), 8) == 0) {
           ESP_LOGD(TAG, "Password matched");
           this->send_command_(
