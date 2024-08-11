@@ -3,10 +3,11 @@
 #include <cinttypes>
 #include <vector>
 
+#include "esphome/components/text/text.h"
+#include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
 #include "esphome/core/defines.h"
 #include "esphome/core/helpers.h"
-#include "esphome/components/uart/uart.h"
 
 #ifdef USE_TIME
 #include "esphome/components/time/real_time_clock.h"
@@ -22,7 +23,7 @@ enum class TuyaDoorLockDatapointType : uint8_t {
   INTEGER = 0x02,  // 4 byte
   STRING = 0x03,   // variable length
   ENUM = 0x04,     // 1 byte
-  BITMASK = 0x05,  // 1/2/4 bytes
+  BITMASK = 0x05,  // 1/2/4 bytes // Not supported
 };
 
 struct TuyaDoorLockDatapoint {
@@ -46,37 +47,67 @@ struct TuyaDoorLockDatapointListener {
 };
 
 enum class TuyaDoorLockCommandType : uint8_t {
-  HEARTBEAT = 0x00,
-  PRODUCT_QUERY = 0x01,
-  CONF_QUERY = 0x02,
-  WIFI_STATE = 0x03,
-  WIFI_RESET = 0x04,
-  WIFI_SELECT = 0x05,
-  DATAPOINT_DELIVER = 0x06,
-  DATAPOINT_REPORT_ASYNC = 0x07,
-  DATAPOINT_QUERY = 0x08,
-  WIFI_TEST = 0x0E,
-  LOCAL_TIME_QUERY = 0x1C,
-  DATAPOINT_REPORT_SYNC = 0x22,
-  DATAPOINT_REPORT_ACK = 0x23,
-  WIFI_RSSI = 0x24,
-  VACUUM_MAP_UPLOAD = 0x28,
-  GET_NETWORK_STATUS = 0x2B,
-  EXTENDED_SERVICES = 0x34,
+  // The one that I recieved
+
+  PRODUCT_QUERY = 0x01,            // Exactly the same // for me is {"p":"bljvjx2nsv02dhao","v":"3.4.0"}
+  WIFI_STATE = 0x02,               // FROM 0x03 The rest is matched
+  DATAPOINT_REPORT = 0x05,         // From 0x07 and 0x22 // Happen everytime someone try to unlock
+  DATAPOINT_RECORD_REPORT = 0x08,  // FROM 0x34 but nothing seems to match (the protocol is matched, but tuya imeplementation is diffrent) // Happen only when unlock successful
+  // DATAPOINT_DELIVER = 0x05, // REPORT REAL-TIME STATUS
+  // DATAPOINT_QUERY = 0x08, // REPORT STATUS OF RECORD TYPE
+  LOCAL_TIME_QUERY = 0x06,  // FROM 0x1C The rest is matched
+  GMT_TIME_QUERY = 0x10,    // FROM 0x0c The rest is matched # BUT esphome only implement local time so..
+  REQUEST_TEMP_PASSWD_CLOUD_MULTIPLE = 0x13,
+  VERIFY_DYNAMIC_PASSWORD = 0x12,  // 8 digits totp
+  MODULE_SEND_COMMAND = 0x09,
+
+  // Below is what they said on the table which seems totally wrong
+
+  HEARTBEAT = 0x00,  // NOT SUPPORTED
+  // CONF_QUERY = 0x03, // CONF_QUERY no longer exist
+  WIFI_RESET = 0x03,
+  WIFI_SELECT = 0x04,
+  WIFI_TEST = 0x07,
+  REQUEST_WIFI_MODULE_FW_UPDATE = 0x0A,
+  WIFI_RSSI = 0x0B,
+  REQUEST_MCU_FW_UPDATE = 0x0c,
+  START_UPDATE = 0x0D,
+  TRANSMIT_UPDATE_PACKAGE = 0x0E,
+  // DATAPOINT_REPORT_ASYNC = 0x0E,
+  REQUEST_TEMP_PASSWD_CLOUD_SINGLE = 0x11,
+  REQUEST_TEMP_PASSWD_CLOUD_SCHEDULE = 0x14,
+  GET_DP_CACHE_COMMAND = 0x15,
+  OFFLINE_DYNAMIC_PASSWORD = 0x16,
+  REPORT_SERIAL_NUMBER_MCU = 0x17,
+  POSITIONAL_NOTATION = 0x1C,
+  AUTOMATIC_UPDATE = 0x21,
+  NOTIFY_MODULE_RESET = 0x25,
+  WIFI_TEST_2 = 0xF0,
+
+  // DATAPOINT_REPORT_SYNC = 0x22,
+  // DATAPOINT_REPORT_ACK = 0x23,
+  // VACUUM_MAP_UPLOAD = 0x28,
+  // GET_NETWORK_STATUS = 0x2B,
+  // EXTENDED_SERVICES = 0x34,
 };
 
 enum class TuyaDoorLockExtendedServicesCommandType : uint8_t {
-  RESET_NOTIFICATION = 0x04,
-  MODULE_RESET = 0x05,
-  UPDATE_IN_PROGRESS = 0x0A,
+  // RESET_NOTIFICATION = 0x04,
+  // MODULE_RESET = 0x05,
+  // UPDATE_IN_PROGRESS = 0x0A,
 };
 
+/**
+ * @deprecated battery has no init
+ */
 enum class TuyaDoorLockInitState : uint8_t {
-  INIT_HEARTBEAT = 0x00,
-  INIT_PRODUCT,
-  INIT_CONF,
-  INIT_WIFI,
-  INIT_DATAPOINT,
+  // INIT_HEARTBEAT = 0x00,
+  // INIT_PRODUCT,
+  // INIT_CONF,
+  // INIT_WIFI,
+  // INIT_DATAPOINT,
+  // INIT_DONE,
+  INIT_LISTEN_ENABLE_PIN = 0x00,
   INIT_DONE,
 };
 
@@ -96,6 +127,11 @@ class TuyaDoorLock : public Component, public uart::UARTDevice {
   void set_boolean_datapoint_value(uint8_t datapoint_id, bool value);
   void set_integer_datapoint_value(uint8_t datapoint_id, uint32_t value);
   void set_status_pin(InternalGPIOPin *status_pin) { this->status_pin_ = status_pin; }
+  void set_en_pin(InternalGPIOPin *en_pin) { this->en_pin_ = en_pin; }
+  // static void listen_enable_pin(TuyaDoorLock *arg);
+  void set_totp_key(const std::string key) { this->totp_key_b32 = key; }
+  void parse_totp_key();
+  // void set_input_totp_text(text::Text *input_totp_text) { input_totp_text_ = input_totp_text; }
   void set_string_datapoint_value(uint8_t datapoint_id, const std::string &value);
   void set_enum_datapoint_value(uint8_t datapoint_id, uint8_t value);
   void set_bitmask_datapoint_value(uint8_t datapoint_id, uint32_t value, uint8_t length);
@@ -106,6 +142,11 @@ class TuyaDoorLock : public Component, public uart::UARTDevice {
   void force_set_enum_datapoint_value(uint8_t datapoint_id, uint8_t value);
   void force_set_bitmask_datapoint_value(uint8_t datapoint_id, uint32_t value, uint8_t length);
   TuyaDoorLockInitState get_init_state();
+  // I add theses here to use from lambda
+  std::string totp_key_b32 = "";
+  uint8_t *totp_key_{nullptr};
+  size_t totp_key_length_ = 0;
+  // text::Text *input_totp_text_{nullptr};
 #ifdef USE_TIME
   void set_time_id(time::RealTimeClock *time_id) { this->time_id_ = time_id; }
 #endif
@@ -133,20 +174,24 @@ class TuyaDoorLock : public Component, public uart::UARTDevice {
   void set_raw_datapoint_value_(uint8_t datapoint_id, const std::vector<uint8_t> &value, bool forced);
   void send_datapoint_command_(uint8_t datapoint_id, TuyaDoorLockDatapointType datapoint_type, std::vector<uint8_t> data);
   void set_status_pin_();
+  // void set_en_pin_();
   void send_wifi_status_();
   uint8_t get_wifi_status_code_();
   uint8_t get_wifi_rssi_();
 
 #ifdef USE_TIME
   void send_local_time_();
+  void send_gmt_time_();
   time::RealTimeClock *time_id_{nullptr};
   bool time_sync_callback_registered_{false};
 #endif
-  TuyaDoorLockInitState init_state_ = TuyaDoorLockInitState::INIT_HEARTBEAT;
+  TuyaDoorLockInitState init_state_ = TuyaDoorLockInitState::INIT_LISTEN_ENABLE_PIN;
   bool init_failed_{false};
   int init_retries_{0};
   uint8_t protocol_version_ = -1;
   InternalGPIOPin *status_pin_{nullptr};
+  InternalGPIOPin *en_pin_{nullptr};
+  bool has_sent_wifi_status = false;
   int status_pin_reported_ = -1;
   int reset_pin_reported_ = -1;
   uint32_t last_command_timestamp_ = 0;
