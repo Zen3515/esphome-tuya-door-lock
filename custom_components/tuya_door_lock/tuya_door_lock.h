@@ -63,8 +63,6 @@ enum class TuyaDoorLockCommandType : uint8_t {
 
   // Below is what they said on the table which seems totally wrong
 
-  HEARTBEAT = 0x00,  // NOT SUPPORTED
-  // CONF_QUERY = 0x03, // CONF_QUERY no longer exist
   WIFI_RESET = 0x03,
   WIFI_SELECT = 0x04,
   WIFI_TEST = 0x07,
@@ -73,7 +71,6 @@ enum class TuyaDoorLockCommandType : uint8_t {
   REQUEST_MCU_FW_UPDATE = 0x0c,
   START_UPDATE = 0x0D,
   TRANSMIT_UPDATE_PACKAGE = 0x0E,
-  // DATAPOINT_REPORT_ASYNC = 0x0E,
   REQUEST_TEMP_PASSWD_CLOUD_SINGLE = 0x11,
   REQUEST_TEMP_PASSWD_CLOUD_SCHEDULE = 0x14,
   GET_DP_CACHE_COMMAND = 0x15,
@@ -83,30 +80,9 @@ enum class TuyaDoorLockCommandType : uint8_t {
   AUTOMATIC_UPDATE = 0x21,
   NOTIFY_MODULE_RESET = 0x25,
   WIFI_TEST_2 = 0xF0,
-
-  // DATAPOINT_REPORT_SYNC = 0x22,
-  // DATAPOINT_REPORT_ACK = 0x23,
-  // VACUUM_MAP_UPLOAD = 0x28,
-  // GET_NETWORK_STATUS = 0x2B,
-  // EXTENDED_SERVICES = 0x34,
 };
 
-enum class TuyaDoorLockExtendedServicesCommandType : uint8_t {
-  // RESET_NOTIFICATION = 0x04,
-  // MODULE_RESET = 0x05,
-  // UPDATE_IN_PROGRESS = 0x0A,
-};
-
-/**
- * @deprecated battery has no init
- */
 enum class TuyaDoorLockInitState : uint8_t {
-  // INIT_HEARTBEAT = 0x00,
-  // INIT_PRODUCT,
-  // INIT_CONF,
-  // INIT_WIFI,
-  // INIT_DATAPOINT,
-  // INIT_DONE,
   INIT_LISTEN_ENABLE_PIN = 0x00,
   INIT_DONE,
 };

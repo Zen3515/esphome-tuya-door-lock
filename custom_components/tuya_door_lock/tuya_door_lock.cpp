@@ -24,19 +24,11 @@ static const int RECEIVE_TIMEOUT = 300;
 static const int MAX_RETRIES = 5;
 
 void TuyaDoorLock::setup() {
-  // there's no heartbeat
-  // this->set_interval("heartbeat", 15000, [this] { this->send_empty_command_(TuyaDoorLockCommandType::HEARTBEAT); });
-  // if (this->status_pin_ != nullptr) {
-  //   this->status_pin_->digital_write(false);
-  // }
-  // Product query
-  // 0x55, 0xAA, 0x00, 0x01, 0x00, 0x00, 0x00
   this->send_empty_command_(TuyaDoorLockCommandType::PRODUCT_QUERY);
 
   if (this->en_pin_ != nullptr) {
     ESP_LOGI(TAG, "setting up enable pin listener");
     this->en_pin_->setup();
-    // this->en_pin_->attach_interrupt(TuyaDoorLock::listen_enable_pin, this, gpio::INTERRUPT_HIGH_LEVEL);
   } else {
     ESP_LOGD(TAG, "en_pin_ is not set");
   }
@@ -45,43 +37,29 @@ void TuyaDoorLock::setup() {
   ESP_LOGD(TAG, "Finished setup");
 }
 
-// void IRAM_ATTR TuyaDoorLock::listen_enable_pin(TuyaDoorLock *instance) {
-//   ESP_LOGD(TAG, "Tuya module enabled, reporting cloud connection");
-//   instance->send_command_(
-//     TuyaDoorLockCommand{
-//       .cmd = TuyaDoorLockCommandType::WIFI_STATE,
-//       .payload = std::vector<uint8_t>{0x04} // Connected with Tuya Cloud
-//     }
-//   );
-//   // Then we loop?
-//   // instance->en_pin_->attach_interrupt(TuyaDoorLock::listen_enable_pin, instance, gpio::INTERRUPT_HIGH_LEVEL);
-// }
-
 void TuyaDoorLock::loop() {
   if ((this->init_state_ == TuyaDoorLockInitState::INIT_DONE) && (this->en_pin_ != nullptr)) {
     const bool is_enable = this->en_pin_->digital_read();
     if (is_enable) {
       if (!this->has_sent_wifi_status) {
-        ESP_LOGD(TAG, "Tuya module enabled, reporting cloud connection in 3s");
-        this->set_timeout("handle_wake", 3000, [this] {
+        ESP_LOGD(TAG, "Tuya module enabled, reporting cloud connection in 1.25s, 3s");
+        this->set_timeout("handle_wake_1.25s", 1250, [this] {
           this->send_command_(
               TuyaDoorLockCommand{
                   .cmd = TuyaDoorLockCommandType::WIFI_STATE,
                   .payload = std::vector<uint8_t>{0x04}  // Connected with Tuya Cloud
               });
         });
-        // this->set_timeout("handle_wake2", 2000, [this] {
-        //   this->send_command_(
-        //     TuyaDoorLockCommand{
-        //       .cmd = TuyaDoorLockCommandType::WIFI_STATE,
-        //       .payload = std::vector<uint8_t>{0x04} // Connected with Tuya Cloud
-        //     }
-        //   );
-        //  });
+        this->set_timeout("handle_wake_3s", 3000, [this] {
+          this->send_command_(
+              TuyaDoorLockCommand{
+                  .cmd = TuyaDoorLockCommandType::WIFI_STATE,
+                  .payload = std::vector<uint8_t>{0x04}  // Connected with Tuya Cloud
+              });
+        });
         this->has_sent_wifi_status = true;
       }
     } else {
-      // ESP_LOGD(TAG, "Tuya module disabled");
       this->has_sent_wifi_status = false;
     }
   }
@@ -95,16 +73,6 @@ void TuyaDoorLock::loop() {
 
 void TuyaDoorLock::dump_config() {
   ESP_LOGCONFIG(TAG, "TuyaDoorLock:");
-  // if (this->init_state_ != TuyaDoorLockInitState::INIT_DONE) {
-  //   if (this->init_failed_) {
-  //     ESP_LOGCONFIG(TAG, "  Initialization failed. Current init_state: %u", static_cast<uint8_t>(this->init_state_));
-  //   } else {
-  //     ESP_LOGCONFIG(TAG, "  Configuration will be reported when setup is complete. Current init_state: %u",
-  //                   static_cast<uint8_t>(this->init_state_));
-  //   }
-  //   ESP_LOGCONFIG(TAG, "  If no further output is received, confirm that this is a supported TuyaDoorLock device.");
-  //   return;
-  // }
   for (auto &info : this->datapoints_) {
     if (info.type == TuyaDoorLockDatapointType::RAW) {
       ESP_LOGCONFIG(TAG, "  Datapoint %u: raw (value: %s)", info.id, format_hex_pretty(info.value_raw).c_str());
@@ -212,18 +180,6 @@ void TuyaDoorLock::handle_command_(uint8_t command, uint8_t version, const uint8
   }
 
   switch (command_type) {
-    // case TuyaDoorLockCommandType::HEARTBEAT:
-    //   ESP_LOGD(TAG, "MCU Heartbeat (0x%02X)", buffer[0]);
-    //   this->protocol_version_ = version;
-    //   if (buffer[0] == 0) {
-    //     ESP_LOGI(TAG, "MCU restarted");
-    //     this->init_state_ = TuyaDoorLockInitState::INIT_HEARTBEAT;
-    //   }
-    //   if (this->init_state_ == TuyaDoorLockInitState::INIT_HEARTBEAT) {
-    //     this->init_state_ = TuyaDoorLockInitState::INIT_PRODUCT;
-    //     this->send_empty_command_(TuyaDoorLockCommandType::PRODUCT_QUERY);
-    //   }
-    //   break;
     case TuyaDoorLockCommandType::PRODUCT_QUERY: {
       ESP_LOGD(TAG, "PRODUCT_QUERY (0x%02X)", command);
       // check it is a valid string made up of printable characters
@@ -240,56 +196,11 @@ void TuyaDoorLock::handle_command_(uint8_t command, uint8_t version, const uint8
         this->product_ = R"({"p":"INVALID"})";
       }
       if (this->init_state_ == TuyaDoorLockInitState::INIT_LISTEN_ENABLE_PIN) {
-        // After init and got the product query, we can just attatch interrupt
-        // this->en_pin_->detach_interrupt();
-        ESP_LOGD(TAG, "Attatching interrupt?");
-        // this->en_pin_->attach_interrupt(TuyaDoorLock::listen_enable_pin, this, gpio::INTERRUPT_HIGH_LEVEL);
         this->init_state_ = TuyaDoorLockInitState::INIT_DONE;
       }
-      // if (this->init_state_ == TuyaDoorLockInitState::INIT_PRODUCT) {
-      //   this->init_state_ = TuyaDoorLockInitState::INIT_CONF;
-      //   // this->send_empty_command_(TuyaDoorLockCommandType::CONF_QUERY);
-      // }
-      // this->set_timeout("datapoint_dump", 1000, [this] { this->dump_config(); });
       break;
     }
-    // case TuyaDoorLockCommandType::CONF_QUERY: {
-    //   if (len >= 2) {
-    //     this->status_pin_reported_ = buffer[0];
-    //     this->reset_pin_reported_ = buffer[1];
-    //   }
-    //   if (this->init_state_ == TuyaDoorLockInitState::INIT_CONF) {
-    //     // If mcu returned status gpio, then we can omit sending wifi state
-    //     if (this->status_pin_reported_ != -1) {
-    //       this->init_state_ = TuyaDoorLockInitState::INIT_DATAPOINT;
-    //       this->send_empty_command_(TuyaDoorLockCommandType::DATAPOINT_QUERY);
-    //       bool is_pin_equals =
-    //           this->status_pin_ != nullptr && this->status_pin_->get_pin() == this->status_pin_reported_;
-    //       // Configure status pin toggling (if reported and configured) or WIFI_STATE periodic send
-    //       if (is_pin_equals) {
-    //         ESP_LOGD(TAG, "Configured status pin %i", this->status_pin_reported_);
-    //         this->set_interval("wifi", 1000, [this] { this->set_status_pin_(); });
-    //       } else {
-    //         ESP_LOGW(TAG, "Supplied status_pin does not equals the reported pin %i. TuyaDoorLockMcu will work in limited mode.",
-    //                  this->status_pin_reported_);
-    //       }
-    //     } else {
-    //       this->init_state_ = TuyaDoorLockInitState::INIT_WIFI;
-    //       ESP_LOGD(TAG, "Configured WIFI_STATE periodic send");
-    //       this->set_interval("wifi", 1000, [this] { this->send_wifi_status_(); });
-    //     }
-    //   }
-    //   break;
-    // }
     case TuyaDoorLockCommandType::WIFI_STATE:
-      // if (this->init_state_ == TuyaDoorLockInitState::INIT_WIFI) {
-      //   this->init_state_ = TuyaDoorLockInitState::INIT_DATAPOINT;
-      //   this->send_empty_command_(TuyaDoorLockCommandType::DATAPOINT_QUERY);
-      // }
-
-      // But we should report that we could connect to cloud (As a response to some other state)
-      // 23:15:27	[D]	[uart_debug:114]	>>> 55 AA 00 02 00 01 04 06
-      // 23:15:27	[D]	[uart_debug:114]	<<< 55 AA 00 02 00 00 01
       ESP_LOGD(TAG, "WIFI_STATE handled, expected: 55 AA 00 02 00 00 01");
       break;
     case TuyaDoorLockCommandType::WIFI_RESET:
@@ -326,22 +237,6 @@ void TuyaDoorLock::handle_command_(uint8_t command, uint8_t version, const uint8
       break;
     case TuyaDoorLockCommandType::MODULE_SEND_COMMAND:
       break;
-    // case TuyaDoorLockCommandType::DATAPOINT_REPORT_ASYNC:
-    // case TuyaDoorLockCommandType::DATAPOINT_REPORT_SYNC:
-    //   if (this->init_state_ == TuyaDoorLockInitState::INIT_DATAPOINT) {
-    //     this->init_state_ = TuyaDoorLockInitState::INIT_DONE;
-    //     this->set_timeout("datapoint_dump", 1000, [this] { this->dump_config(); });
-    //     this->initialized_callback_.call();
-    //   }
-    //   this->handle_datapoints_(buffer, len);
-
-    //   if (command_type == TuyaDoorLockCommandType::DATAPOINT_REPORT_SYNC) {
-    //     this->send_command_(
-    //         TuyaDoorLockCommand{.cmd = TuyaDoorLockCommandType::DATAPOINT_REPORT_ACK, .payload = std::vector<uint8_t>{0x01}});
-    //   }
-    //   break;
-    // case TuyaDoorLockCommandType::DATAPOINT_QUERY:
-    //   break;
     case TuyaDoorLockCommandType::WIFI_TEST:
       ESP_LOGD(TAG, "WIFI_TEST (0x%02X)", command);
       this->send_command_(TuyaDoorLockCommand{.cmd = TuyaDoorLockCommandType::WIFI_TEST, .payload = std::vector<uint8_t>{0x00, 0x00}});
@@ -360,7 +255,7 @@ void TuyaDoorLock::handle_command_(uint8_t command, uint8_t version, const uint8
       //         if (now.is_valid()) {
       //           // Convert the current time to a timestamp (in seconds since the epoch)
       //           auto timestamp = (time_t)floor(now.timestamp / 30.0);  // Use the same 30-second time window
-      //           const uint32_t generated_password = otp::totp_hash_token(this->totp_key_, totp_key_length_, timestamp, 6);
+      //           const uint32_t generated_password = otp::totp_hash_token(this->totp_key_, this->totp_key_length_, timestamp, 6);
       //           ESP_LOGD(TAG, "Generated TOTP password: %u", generated_password);
       //         } else {
       //           ESP_LOGW(TAG, "Current time is invalid, cannot generate TOTP password.");
@@ -444,43 +339,6 @@ void TuyaDoorLock::handle_command_(uint8_t command, uint8_t version, const uint8
         ESP_LOGW(TAG, "GMT_TIME_QUERY is not handled because time is not configured");
       }
       break;
-    // case TuyaDoorLockCommandType::VACUUM_MAP_UPLOAD:
-    //   this->send_command_(
-    //       TuyaDoorLockCommand{.cmd = TuyaDoorLockCommandType::VACUUM_MAP_UPLOAD, .payload = std::vector<uint8_t>{0x01}});
-    //   ESP_LOGW(TAG, "Vacuum map upload requested, responding that it is not enabled.");
-    //   break;
-    // case TuyaDoorLockCommandType::GET_NETWORK_STATUS: {
-    //   uint8_t wifi_status = this->get_wifi_status_code_();
-
-    //   this->send_command_(
-    //       TuyaDoorLockCommand{.cmd = TuyaDoorLockCommandType::GET_NETWORK_STATUS, .payload = std::vector<uint8_t>{wifi_status}});
-    //   ESP_LOGD(TAG, "Network status requested, reported as %i", wifi_status);
-    //   break;
-    // }
-    // case TuyaDoorLockCommandType::EXTENDED_SERVICES: {
-    //   uint8_t subcommand = buffer[0];
-    //   switch ((TuyaDoorLockExtendedServicesCommandType) subcommand) {
-    //     case TuyaDoorLockExtendedServicesCommandType::RESET_NOTIFICATION: {
-    //       this->send_command_(
-    //           TuyaDoorLockCommand{.cmd = TuyaDoorLockCommandType::EXTENDED_SERVICES,
-    //                       .payload = std::vector<uint8_t>{
-    //                           static_cast<uint8_t>(TuyaDoorLockExtendedServicesCommandType::RESET_NOTIFICATION), 0x00}});
-    //       ESP_LOGD(TAG, "Reset status notification enabled");
-    //       break;
-    //     }
-    //     case TuyaDoorLockExtendedServicesCommandType::MODULE_RESET: {
-    //       ESP_LOGE(TAG, "EXTENDED_SERVICES::MODULE_RESET is not handled");
-    //       break;
-    //     }
-    //     case TuyaDoorLockExtendedServicesCommandType::UPDATE_IN_PROGRESS: {
-    //       ESP_LOGE(TAG, "EXTENDED_SERVICES::UPDATE_IN_PROGRESS is not handled");
-    //       break;
-    //     }
-    //     default:
-    //       ESP_LOGE(TAG, "Invalid extended services subcommand (0x%02X) received", subcommand);
-    //   }
-    //   break;
-    // }
     default:
       ESP_LOGE(TAG, "Invalid command (0x%02X) received", command);
   }
@@ -600,20 +458,11 @@ void TuyaDoorLock::send_raw_command_(TuyaDoorLockCommand command) {
 
   this->last_command_timestamp_ = millis();
   switch (command.cmd) {
-    // case TuyaDoorLockCommandType::HEARTBEAT:
-    //   this->expected_response_ = TuyaDoorLockCommandType::HEARTBEAT;
-    //   break;
     case TuyaDoorLockCommandType::PRODUCT_QUERY:
       this->expected_response_ = TuyaDoorLockCommandType::PRODUCT_QUERY;
       break;
-    // case TuyaDoorLockCommandType::CONF_QUERY:
-    //   this->expected_response_ = TuyaDoorLockCommandType::CONF_QUERY;
-    //   break;
     case TuyaDoorLockCommandType::MODULE_SEND_COMMAND:
       break;
-    // case TuyaDoorLockCommandType::DATAPOINT_QUERY:
-    //   this->expected_response_ = TuyaDoorLockCommandType::DATAPOINT_REPORT_ASYNC;
-    //   break;
     case TuyaDoorLockCommandType::WIFI_STATE:
       break;
     case TuyaDoorLockCommandType::DATAPOINT_REPORT:
