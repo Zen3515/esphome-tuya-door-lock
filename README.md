@@ -179,3 +179,9 @@ script:
           state: "Locked"
 
 ```
+
+Resources:
+- https://developer.tuya.com/en/docs/iot/door-lock-mcu-protocol?id=Kcmktkdx4hovi
+- https://developer.tuya.com/en/docs/iot/door-lock-mcu-docking?id=K950t0p1l51k2
+- https://developer.tuya.com/en/docs/iot/wifi-dp?id=K9fewhnlvk6by
+- https://developer.tuya.com/en/docs/iot/wifi-doorlock-develop-process?id=K9eta08zvx4j7
